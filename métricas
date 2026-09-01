@@ -1,0 +1,43 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Comms Intelligence</title>
+<style>
+body{margin:0;font-family:Arial,sans-serif;background:#f5f6f8;color:#17202a}header{background:#102f46;color:#fff;padding:24px}nav{padding:12px;background:#fff;border-bottom:1px solid #ddd}nav button{margin:3px;padding:9px;border:0;border-radius:7px;cursor:pointer}main{max-width:1300px;margin:auto;padding:22px}.view{display:none}.view.active{display:block}.grid{display:grid;gap:14px}.kpis{grid-template-columns:repeat(5,1fr)}.two{grid-template-columns:repeat(2,1fr)}.card{background:#fff;border:1px solid #ddd;border-radius:12px;padding:18px}.value{font-size:27px;font-weight:bold;margin-top:6px}table{width:100%;border-collapse:collapse}td,th{padding:9px;border-bottom:1px solid #eee;text-align:left;font-size:13px}.form{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}input,select{width:100%;padding:9px;box-sizing:border-box}.primary{background:#102f46;color:#fff;padding:10px 14px;border:0;border-radius:7px}.muted{color:#697586;font-size:13px}@media(max-width:800px){.kpis,.two,.form{grid-template-columns:1fr}}
+</style></head><body>
+<header><h1>Comms Intelligence</h1><div>Sistema propio de gestión, análisis e impacto de comunicaciones</div></header>
+<nav id="nav"></nav><main>
+<section id="ejecutivo" class="view active"><div id="kpis" class="grid kpis"></div><br><div class="grid two"><div class="card"><h2>Diagnóstico ejecutivo</h2><div id="diagnosis"></div></div><div class="card"><h2>Alertas</h2><div id="alerts"></div></div></div></section>
+<section id="web" class="view"><div class="card"><h2>Monitoreo Web</h2><p class="muted">Módulo preparado para integrar GA4 y Google Search Console. Actualmente acepta datos mediante registros y CSV.</p><div id="webkpis" class="grid kpis"></div></div><br><div class="grid two"><div class="card"><h2>SEO</h2><p>Preparado para impresiones, clics, CTR, posición, consultas y páginas.</p></div><div class="card"><h2>Conversión</h2><div id="webconv"></div></div></div></section>
+<section id="areas" class="view"><div class="card"><h2>Desempeño por área</h2><div id="table"></div></div></section>
+<section id="criterios" class="view"><div class="card"><h2>8 criterios de gestión</h2><div id="criteria"></div></div></section>
+<section id="decisiones" class="view"><div class="card"><h2>Decisiones y próximos pasos</h2><div id="decisions"></div></div></section>
+<section id="datos" class="view"><div class="card"><h2>Centro de datos</h2><div class="form">
+<label>Fecha<input id="date" type="date"></label><label>Área<select id="area"><option>Web</option><option>Redes</option><option>Campañas</option><option>Contenido</option><option>PR</option></select></label>
+<label>Proyecto<input id="project" value="MegaSalud"></label><label>Objetivo<input id="objective"></label><label>Alcance / sesiones<input id="reach" type="number" value="0"></label><label>Interacciones / eventos<input id="interactions" type="number" value="0"></label><label>Leads<input id="leads" type="number" value="0"></label><label>Conversiones<input id="conv" type="number" value="0"></label></div>
+<h3>Criterios (0–100)</h3><div id="cf" class="form"></div><br><button class="primary" onclick="add()">Guardar registro</button> <button onclick="demo()">Cargar demo</button> <button onclick="csv()">Exportar CSV</button>
+<p class="muted">Lógica: DATO → INDICADOR → INTERPRETACIÓN → HIPÓTESIS → RECOMENDACIÓN → DECISIÓN. El sistema no inventa conclusiones.</p></div></section>
+</main>
+<script>
+const C=["Estratégico","Técnico","Creativo","Analítico","Operativo","Comunicacional","Crítico","Resultados"],W=[.16,.10,.10,.14,.10,.12,.13,.15];
+let d=JSON.parse(localStorage.getItem("comms_intelligence")||"[]");
+const pages=[["ejecutivo","Ejecutivo"],["web","Web"],["areas","Áreas"],["criterios","Criterios"],["decisiones","Decisiones"],["datos","Datos"]];
+nav.innerHTML=pages.map(x=>`<button onclick="show('${x[0]}')">${x[1]}</button>`).join("");
+cf.innerHTML=C.map((x,i)=>`<label>${x}<input id="c${i}" type="number" value="70" min="0" max="100"></label>`).join("");
+function show(id){document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));document.getElementById(id).classList.add("active");render()}
+function score(r){return r.c.reduce((s,v,i)=>s+v*W[i],0)}
+function add(){d.push({date:date.value||new Date().toISOString().slice(0,10),area:area.value,project:project.value,objective:objective.value,reach:+reach.value,interactions:+interactions.value,leads:+leads.value,conv:+conv.value,c:C.map((_,i)=>+document.getElementById("c"+i).value||0)});save();render()}
+function save(){localStorage.setItem("comms_intelligence",JSON.stringify(d))}
+function demo(){d=[{date:"2026-08-01",area:"Web",project:"MegaSalud",objective:"Demanda",reach:18200,interactions:980,leads:145,conv:42,c:[82,78,74,88,76,84,86,81]},{date:"2026-08-15",area:"Redes",project:"MegaSalud",objective:"Posicionamiento",reach:53000,interactions:1850,leads:28,conv:4,c:[70,82,80,62,78,73,84,55]},{date:"2026-09-01",area:"Campañas",project:"MegaSalud",objective:"Conversión",reach:29000,interactions:1300,leads:210,conv:55,c:[90,86,79,84,80,88,87,89]}];save();render()}
+function fmt(n){return Intl.NumberFormat("es-DO",{notation:"compact",maximumFractionDigits:1}).format(n)}
+function render(){let R=d.reduce((a,r)=>a+r.reach,0),L=d.reduce((a,r)=>a+r.leads,0),V=d.reduce((a,r)=>a+r.conv,0),I=d.reduce((a,r)=>a+r.interactions,0),S=d.length?d.reduce((a,r)=>a+score(r),0)/d.length:0;
+kpis.innerHTML=[["Alcance / sesiones",R],["Interacciones / eventos",I],["Leads",L],["Conversiones",V],["Score global",S.toFixed(1)+"/100"]].map(x=>`<div class="card"><span class="muted">${x[0]}</span><div class="value">${typeof x[1]=="number"?fmt(x[1]):x[1]}</div></div>`).join("");
+diagnosis.innerHTML=S>=80?"Desempeño consistente. Priorizar optimización y escalamiento.":S>=65?"Desempeño mixto. Concentrar recursos en los cuellos de botella.":"Desempeño débil o evidencia insuficiente. Corregir medición y operación antes de escalar.";
+alerts.innerHTML=d.filter(r=>score(r)<65).map(r=>`<p><b>ALERTA · ${r.area}</b><br>${r.objective||"Revisar desempeño"} · Score ${score(r).toFixed(1)}</p>`).join("")||"<p class='muted'>Sin alertas automáticas.</p>";
+let w=d.filter(r=>r.area=="Web"),ws=w.reduce((a,r)=>a+r.reach,0),wl=w.reduce((a,r)=>a+r.leads,0),wv=w.reduce((a,r)=>a+r.conv,0);
+webkpis.innerHTML=[["Sesiones / usuarios",ws],["Leads web",wl],["Conversiones web",wv]].map(x=>`<div class="card"><span class="muted">${x[0]}</span><div class="value">${fmt(x[1])}</div></div>`).join("");
+webconv.innerHTML=`Tasa lead/sesión: <b>${ws?(wl/ws*100).toFixed(2):0}%</b><br>Tasa conversión/lead: <b>${wl?(wv/wl*100).toFixed(2):0}%</b>`;
+table.innerHTML=d.length?`<table><tr><th>Fecha</th><th>Área</th><th>Proyecto</th><th>Objetivo</th><th>Alcance</th><th>Leads</th><th>Conv.</th><th>Score</th></tr>${d.slice().reverse().map(r=>`<tr><td>${r.date}</td><td>${r.area}</td><td>${r.project}</td><td>${r.objective}</td><td>${fmt(r.reach)}</td><td>${fmt(r.leads)}</td><td>${fmt(r.conv)}</td><td>${score(r).toFixed(1)}</td></tr>`).join("")}</table>`:"<p class='muted'>Sin datos.</p>";
+let av=C.map((_,i)=>d.length?d.reduce((a,r)=>a+r.c[i],0)/d.length:0);criteria.innerHTML=`<table><tr><th>Criterio</th><th>Score</th><th>Lectura</th></tr>${C.map((x,i)=>`<tr><td>${x}</td><td>${av[i].toFixed(1)}</td><td>${av[i]>=80?"Fortaleza":av[i]>=65?"En desarrollo":"Prioridad de mejora"}</td></tr>`).join("")}</table>`;
+let low=d.filter(r=>score(r)<75);decisions.innerHTML=low.length?low.map(r=>`<p><b>${r.area}</b>: investigar causa → validar hipótesis → decidir acción → volver a medir.</p>`).join(""):"<p class='muted'>No hay decisiones automáticas pendientes con la evidencia disponible.</p>"}
+function csv(){let h=["date","area","project","objective","reach","interactions","leads","conv",...C];let out=[h.join(",")].concat(d.map(r=>[r.date,r.area,r.project,r.objective,r.reach,r.interactions,r.leads,r.conv,...r.c].join(","))).join("\n");let a=document.createElement("a");a.href=URL.createObjectURL(new Blob([out],{type:"text/csv"}));a.download="comms-intelligence.csv";a.click()}
+demo();
+</script></body></html>
