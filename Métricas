@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard de Gestión e Impacto</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--ink:#17202a;--muted:#697586;--line:#e4e7ec;--accent:#1f5eff;--good:#16803c;--warn:#b7791f;--bad:#c53030}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:#111827;color:white;padding:28px 34px;position:sticky;top:0;z-index:5;box-shadow:0 2px 12px #0001}
+header h1{margin:0 0 6px;font-size:24px}header p{margin:0;color:#cbd5e1}
+main{max-width:1500px;margin:auto;padding:24px}
+.toolbar,.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 2px 8px #00000008}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+button,input,select,textarea{font:inherit}button{border:0;border-radius:9px;padding:10px 14px;cursor:pointer;background:#eef2f7;color:var(--ink);font-weight:600}button.primary{background:var(--accent);color:white}button.danger{background:#fee2e2;color:#991b1b}
+input,select,textarea{width:100%;border:1px solid #d6dae1;border-radius:8px;padding:9px;background:white}textarea{min-height:70px;resize:vertical}
+.grid{display:grid;gap:16px}.kpis{grid-template-columns:repeat(6,minmax(130px,1fr));margin-bottom:16px}.two{grid-template-columns:repeat(2,minmax(0,1fr))}.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.kpi strong{display:block;font-size:28px;margin:5px 0}.label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}.section{margin:28px 0 10px;font-size:18px}
+.badge{display:inline-block;border-radius:999px;padding:4px 9px;font-size:12px;font-weight:700}.good{background:#dcfce7;color:#166534}.warn{background:#fef3c7;color:#92400e}.bad{background:#fee2e2;color:#991b1b}.neutral{background:#e5e7eb;color:#374151}
+.chartbox{height:310px}.chartbox canvas{max-height:290px}.metric{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.formgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:700}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--muted);font-size:11px;text-transform:uppercase}
+.scroll{overflow:auto;max-height:430px}.insight{border-left:4px solid var(--accent);padding:12px 14px;background:#f8fafc;border-radius:8px;margin:8px 0}.insight b{display:block;margin-bottom:4px}
+#toast{position:fixed;right:20px;bottom:20px;background:#111827;color:white;padding:12px 16px;border-radius:10px;display:none;z-index:20}
+@media(max-width:1050px){.kpis{grid-template-columns:repeat(3,1fr)}.formgrid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:700px){main{padding:12px}.two,.three{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}.formgrid{grid-template-columns:1fr}header{padding:20px}}
+@media print{header,.toolbar,#dataSection{display:none!important}body{background:white}.card{box-shadow:none;break-inside:avoid}main{max-width:none;padding:0}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Dashboard de Gestión, Criterio e Impacto</h1>
+  <p>Datos → indicadores → diagnóstico → recomendaciones → decisión</p>
+</header>
+<main>
+  <div class="toolbar">
+    <button class="primary" onclick="document.getElementById('dataSection').scrollIntoView()">Actualizar datos</button>
+    <button onclick="document.getElementById('csvInput').click()">Importar CSV</button>
+    <input id="csvInput" type="file" accept=".csv,text/csv" style="display:none" onchange="importCSV(event)">
+    <button onclick="exportCSV()">Exportar CSV</button>
+    <button onclick="window.print()">Imprimir / PDF</button>
+    <button onclick="resetFilters()">Reiniciar filtros</button>
+    <button class="danger" onclick="clearData()">Borrar datos</button>
+    <span id="dataStatus" style="padding:10px;color:var(--muted)"></span>
+  </div>
+
+  <div class="grid kpis">
+    <div class="card kpi"><span class="label">Acciones</span><strong id="kActions">0</strong></div>
+    <div class="card kpi"><span class="label">Entregables</span><strong id="kDeliverables">0</strong></div>
+    <div class="card kpi"><span class="label">Alcance</span><strong id="kReach">0</strong></div>
+    <div class="card kpi"><span class="label">Interacciones</span><strong id="kInteractions">0</strong></div>
+    <div class="card kpi"><span class="label">Engagement</span><strong id="kEngagement">N/A</strong></div>
+    <div class="card kpi"><span class="label">Conversiones</span><strong id="kConversions">0</strong></div>
+  </div>
+
+  <div class="grid three">
+    <div class="card"><span class="label">Variación vs. período anterior</span><div id="variation" style="margin-top:10px">N/A</div></div>
+    <div class="card"><span class="label">Score de criterios</span><div id="score" style="font-size:30px;font-weight:800;margin-top:5px">N/A</div></div>
+    <div class="card"><span class="label">Evidencia</span><div id="evidence" style="margin-top:10px">Sin datos</div></div>
+  </div>
+
+  <h2 class="section">Diagnóstico ejecutivo</h2>
+  <div class="grid three">
+    <div class="card"><h3>Fortalezas</h3><div id="strengths"></div></div>
+    <div class="card"><h3>Problemas / alertas</h3><div id="problems"></div></div>
+    <div class="card"><h3>Oportunidades</h3><div id="opportunities"></div></div>
+  </div>
+
+  <h2 class="section">Recomendaciones priorizadas</h2>
+  <div class="card" id="recommendations"></div>
+
+  <h2 class="section">Evolución y rendimiento</h2>
+  <div class="grid two">
+    <div class="card chartbox"><canvas id="trendChart"></canvas></div>
+    <div class="card chartbox"><canvas id="channelChart"></canvas></div>
+    <div class="card chartbox"><canvas id="criteriaChart"></canvas></div>
+    <div class="card chartbox"><canvas id="funnelChart"></canvas></div>
+  </div>
+
+  <h2 class="section">Filtros</h2>
+  <div class="card formgrid">
+    <div class="field"><label>Desde</label><input id="fDate" type="date" onchange="render()"></div>
+    <div class="field"><label>Hasta</label><input id="tDate" type="date" onchange="render()"></div>
+    <div class="field"><label>Área</label><select id="fArea" onchange="render()"><option value="">Todas</option></select></div>
+    <div class="field"><label>Canal</label><select id="fChannel" onchange="render()"><option value="">Todos</option></select></div>
+    <div class="field"><label>Proyecto</label><select id="fProject" onchange="render()"><option value="">Todos</option></select></div>
+    <div class="field"><label>Estado</label><select id="fStatus" onchange="render()"><option value="">Todos</option></select></div>
+    <div class="field" style="grid-column:span 2"><label>Buscar</label><input id="fSearch" oninput="render()" placeholder="acción, objetivo, resultado..."></div>
+  </div>
+
+  <h2 class="section">Criterios</h2>
+  <div class="grid two">
+    <div class="card chartbox"><canvas id="radarChart"></canvas></div>
+    <div class="card scroll"><table><thead><tr><th>Criterio</th><th>Puntuación</th><th>Evidencia</th></tr></thead><tbody id="criteriaTable"></tbody></table></div>
+  </div>
+
+  <h2 class="section">Impacto de la gestión</h2>
+  <div class="card scroll"><table><thead><tr><th>Acción</th><th>Resultado</th><th>Impacto</th><th>Motivo</th></tr></thead><tbody id="impactTable"></tbody></table></div>
+
+  <h2 class="section">Tabla de gestión</h2>
+  <div class="card scroll"><table><thead><tr><th>Fecha</th><th>Área</th><th>Acción</th><th>Objetivo</th><th>Entregable</th><th>Resultado</th><th>Estado</th></tr></thead><tbody id="dataTable"></tbody></table></div>
+
+  <h2 class="section" id="dataSection">Actualizar datos</h2>
+  <div class="card">
+    <p style="color:var(--muted)">Puedes registrar acciones individualmente o importar un CSV. Las puntuaciones de criterios deben ser de 1 a 10. Los campos numéricos vacíos se tratan como N/A, no como cero cuando corresponda.</p>
+    <form id="entryForm" class="formgrid">
+      <div class="field"><label>Fecha *</label><input name="fecha" type="date" required></div>
+      <div class="field"><label>Área *</label><input name="area" required></div>
+      <div class="field"><label>Proyecto</label><input name="proyecto"></div>
+      <div class="field"><label>Acción *</label><input name="accion" required></div>
+      <div class="field"><label>Canal</label><input name="canal"></div>
+      <div class="field"><label>Objetivo</label><input name="objetivo"></div>
+      <div class="field"><label>Entregable</label><input name="entregable"></div>
+      <div class="field"><label>Alcance</label><input name="alcance" type="number" min="0"></div>
+      <div class="field"><label>Interacciones</label><input name="interacciones" type="number" min="0"></div>
+      <div class="field"><label>Leads</label><input name="leads" type="number" min="0"></div>
+      <div class="field"><label>Conversiones</label><input name="conversiones" type="number" min="0"></div>
+      <div class="field"><label>Inversión</label><input name="inversion" type="number" min="0" step="0.01"></div>
+      <div class="field"><label>Resultado</label><input name="resultado"></div>
+      <div class="field"><label>Estado</label><select name="estado"><option>Completado</option><option>En progreso</option><option>Pendiente</option></select></div>
+      <div class="field"><label>Estratégico</label><input name="estrategico" type="number" min="1" max="10"></div>
+      <div class="field"><label>Técnico</label><input name="tecnico" type="number" min="1" max="10"></div>
+      <div class="field"><label>Creativo</label><input name="creativo" type="number" min="1" max="10"></div>
+      <div class="field"><label>Analítico</label><input name="analitico" type="number" min="1" max="10"></div>
+      <div class="field"><label>Operativo</label><input name="operativo" type="number" min="1" max="10"></div>
+      <div class="field"><label>Comunicacional</label><input name="comunicacional" type="number" min="1" max="10"></div>
+      <div class="field"><label>Crítico</label><input name="critico" type="number" min="1" max="10"></div>
+      <div class="field"><label>Resultados</label><input name="resultados" type="number" min="1" max="10"></div>
+      <div class="field" style="grid-column:span 2"><label>Evidencia / observación</label><textarea name="evidencia"></textarea></div>
+      <div style="grid-column:1/-1"><button class="primary" type="submit">Agregar registro</button><button type="button" onclick="loadDemo()">Cargar datos demo</button></div>
+    </form>
+  </div>
+</main>
+<div id="toast"></div>
+<script>
+const KEY='gestionDashboardDataV1';
+const criteria=['estrategico','tecnico','creativo','analitico','operativo','comunicacional','critico','resultados'];
+const labels=['Estratégico','Técnico','Creativo','Analítico','Operativo','Comunicacional','Crítico','Resultados'];
+const weights=[.15,.10,.10,.15,.10,.15,.10,.15];
+let data=JSON.parse(localStorage.getItem(KEY)||'[]');
+let charts={};
+
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+const num=v=>v===''||v==null||isNaN(Number(v))?null:Number(v);
+const sum=(a,k)=>a.reduce((x,r)=>x+(num(r[k])??0),0);
+function fmt(n){return Number(n||0).toLocaleString('es-DO',{maximumFractionDigits:2})}
+function toast(t){let e=document.getElementById('toast');e.textContent=t;e.style.display='block';setTimeout(()=>e.style.display='none',2200)}
+function save(){localStorage.setItem(KEY,JSON.stringify(data));document.getElementById('dataStatus').textContent=`${data.length} registros guardados localmente`}
+
+function unique(key){return [...new Set(data.map(x=>x[key]).filter(Boolean))].sort()}
+function populateFilters(){
+ [['fArea','area'],['fChannel','canal'],['fProject','proyecto'],['fStatus','estado']].forEach(([id,key])=>{
+   const e=document.getElementById(id), old=e.value;
+   e.innerHTML='<option value="">Todos</option>'+unique(key).map(v=>`<option>${esc(v)}</option>`).join('');
+   e.value=old;
+ })
+}
+function filtered(){
+ const fd=document.getElementById('fDate').value,td=document.getElementById('tDate').value;
+ const area=document.getElementById('fArea').value,channel=document.getElementById('fChannel').value,project=document.getElementById('fProject').value,status=document.getElementById('fStatus').value,search=document.getElementById('fSearch').value.toLowerCase();
+ return data.filter(r=>(!fd||r.fecha>=fd)&&(!td||r.fecha<=td)&&(!area||r.area===area)&&(!channel||r.canal===channel)&&(!project||r.proyecto===project)&&(!status||r.estado===status)&&(!search||Object.values(r).join(' ').toLowerCase().includes(search)));
+}
+function avgCriteria(rows,k){let a=rows.map(r=>num(r[k])).filter(v=>v!=null);return a.length?a.reduce((x,y)=>x+y,0)/a.length:null}
+function calcScore(rows){let vals=criteria.map(k=>avgCriteria(rows,k));let used=0,score=0;vals.forEach((v,i)=>{if(v!=null){score+=v*weights[i];used+=weights[i]}});return used?score/used:null}
+function periodTotals(rows){return {reach:sum(rows,'alcance'),interactions:sum(rows,'interacciones'),leads:sum(rows,'leads'),conversions:sum(rows,'conversiones')}}
+
+function impact(r){
+ const score=calcScore([r]), measurable=[r.alcance,r.interacciones,r.leads,r.conversiones,r.resultado].filter(v=>v!==''&&v!=null).length;
+ if(score==null && !measurable)return ['Sin evidencia suficiente','No hay datos suficientes para clasificar impacto.'];
+ let signal=0;
+ if((num(r.conversiones)||0)>0)signal+=3; else if((num(r.leads)||0)>0)signal+=2; else if((num(r.interacciones)||0)>0)signal+=1;
+ if(score>=8)signal+=2; else if(score>=7)signal+=1;
+ if(signal>=4)return ['Alto','Hay evidencia cuantitativa y/o una evaluación alta.'];
+ if(signal>=2)return ['Medio','Existe alguna evidencia de rendimiento, pero es parcial.'];
+ if(measurable)return ['Bajo','Existe actividad o evidencia limitada, sin señales suficientes de impacto alto.'];
+ return ['Sin evidencia suficiente','No hay evidencia suficiente para clasificar impacto.'];
+}
+
+function recommendations(rows){
+ let out=[];
+ const current=periodTotals(rows);
+ const prevDates=[...new Set(data.map(r=>r.fecha))].sort();
+ const latest=prevDates[prevDates.length-1], prev=prevDates[prevDates.length-2];
+ if(latest&&prev){
+   const a=periodTotals(data.filter(r=>r.fecha===latest)),b=periodTotals(data.filter(r=>r.fecha===prev));
+   [['Alcance','reach'],['Interacciones','interactions'],['Leads','leads'],['Conversiones','conversions']].forEach(([name,k])=>{
+     if(b[k]>0){let v=(a[k]-b[k])/b[k]*100;if(v<=-15)out.push(['Alta',`Revisar la caída de ${name.toLowerCase()}.`,`La variación entre los dos últimos períodos es ${v.toFixed(1)}%.`,`Analítico + Resultados`]);}
+   });
+ }
+ const score=calcScore(rows);
+ if(score!=null&&score<6)out.push(['Alta','Revisar la alineación y ejecución general.','El score ponderado de criterios está por debajo de 6/10.','Criterios']);
+ const c=criteria.map((k,i)=>({k,i,v:avgCriteria(rows,k)})).filter(x=>x.v!=null).sort((a,b)=>a.v-b.v);
+ if(c.length&&c[0].v<6)out.push(['Alta',`Atender el criterio ${labels[c[0].i].toLowerCase()}.`,`Puntuación media: ${c[0].v.toFixed(1)}/10.`,'Criterios']);
+ const er=current.reach?current.interactions/current.reach*100:null;
+ if(er!=null&&er<1)out.push(['Media','Revisar la eficiencia del contenido y su distribución.',`El engagement calculado sobre alcance es ${er.toFixed(2)}%.`,'Analítico + Comunicacional']);
+ if(current.leads>0&&current.conversions===0)out.push(['Alta','Revisar el recorrido entre lead y conversión.',`Hay ${fmt(current.leads)} leads y 0 conversiones en el período filtrado.`,'Resultados + Estratégico']);
+ if(!out.length)out.push(['Media','Mantener monitoreo y acumular evidencia.','No se detectaron reglas de alerta suficientes con los datos disponibles.','Analítico']);
+ return out;
+}
+
+function render(){
+ populateFilters(); const rows=filtered(),tot=periodTotals(rows);
+ document.getElementById('kActions').textContent=fmt(rows.length);
+ document.getElementById('kDeliverables').textContent=fmt(rows.filter(r=>r.entregable).length);
+ document.getElementById('kReach').textContent=fmt(tot.reach);
+ document.getElementById('kInteractions').textContent=fmt(tot.interactions);
+ document.getElementById('kEngagement').textContent=tot.reach?((tot.interactions/tot.reach)*100).toFixed(2)+'%':'N/A';
+ document.getElementById('kConversions').textContent=fmt(tot.conversions);
+ const sc=calcScore(rows);document.getElementById('score').textContent=sc==null?'N/A':sc.toFixed(2)+'/10';
+ document.getElementById('evidence').textContent=rows.length?`${rows.length} registro(s) analizados.`:'Sin datos en el filtro actual.';
+ renderInsights(rows); renderTables(rows); renderCharts(rows); save();
+}
+function renderInsights(rows){
+ const score=calcScore(rows), c=criteria.map((k,i)=>({i,v:avgCriteria(rows,k)})).filter(x=>x.v!=null);
+ const strengths=c.filter(x=>x.v>=7).sort((a,b)=>b.v-a.v).slice(0,3),weak=c.filter(x=>x.v<7).sort((a,b)=>a.v-b.v).slice(0,3);
+ document.getElementById('strengths').innerHTML=strengths.length?strengths.map(x=>`<div class="insight"><b>${labels[x.i]}</b>${x.v.toFixed(1)}/10</div>`).join(''):'<div class="neutral badge">Sin evidencia suficiente</div>';
+ document.getElementById('problems').innerHTML=weak.length?weak.map(x=>`<div class="insight"><b>${labels[x.i]}</b>${x.v.toFixed(1)}/10</div>`).join(''):'<div class="neutral badge">No se detectan criterios bajo 7/10</div>';
+ const rec=recommendations(rows);
+ document.getElementById('opportunities').innerHTML=rec.filter(x=>x[0]!=='Alta').slice(0,3).map(x=>`<div class="insight"><b>${x[1]}</b>${x[2]}</div>`).join('')||'<div class="neutral badge">Acumular más evidencia</div>';
+ document.getElementById('recommendations').innerHTML=rec.map(x=>`<div class="insight"><span class="badge ${x[0]==='Alta'?'bad':x[0]==='Media'?'warn':'good'}">${x[0]}</span><b>${x[1]}</b><div>${x[2]}</div><small>${x[3]}</small></div>`).join('');
+}
+function renderTables(rows){
+ document.getElementById('dataTable').innerHTML=rows.slice().sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(r=>`<tr><td>${esc(r.fecha)}</td><td>${esc(r.area)}</td><td>${esc(r.accion)}</td><td>${esc(r.objetivo)}</td><td>${esc(r.entregable)}</td><td>${esc(r.resultado)}</td><td>${esc(r.estado)}</td></tr>`).join('')||'<tr><td colspan="7">Sin datos</td></tr>';
+ document.getElementById('impactTable').innerHTML=rows.map(r=>{let x=impact(r);return `<tr><td>${esc(r.accion)}</td><td>${esc(r.resultado)}</td><td><span class="badge ${x[0]==='Alto'?'good':x[0]==='Medio'?'warn':x[0]==='Bajo'?'bad':'neutral'}">${x[0]}</span></td><td>${x[1]}</td></tr>`}).join('')||'<tr><td colspan="4">Sin datos</td></tr>';
+ document.getElementById('criteriaTable').innerHTML=criteria.map((k,i)=>{let v=avgCriteria(rows,k);return `<tr><td>${labels[i]}</td><td>${v==null?'N/A':v.toFixed(1)+'/10'}</td><td>${esc(rows.find(r=>r[k]!=null&&r[k]!=='')?.evidencia||'')}</td></tr>`}).join('');
+}
+function destroy(id){if(charts[id])charts[id].destroy()}
+function make(id,type,data,options={}){destroy(id);charts[id]=new Chart(document.getElementById(id),{type,data,options:{responsive:true,maintainAspectRatio:false,...options}})}
+function renderCharts(rows){
+ const byDate={};rows.forEach(r=>{byDate[r.fecha]??={reach:0,int:0};byDate[r.fecha].reach+=num(r.alcance)||0;byDate[r.fecha].int+=num(r.interacciones)||0});
+ const dates=Object.keys(byDate).sort();
+ make('trendChart','line',{labels:dates,datasets:[{label:'Alcance',data:dates.map(d=>byDate[d].reach)},{label:'Interacciones',data:dates.map(d=>byDate[d].int)}]});
+ const ch={};rows.forEach(r=>{let k=r.canal||'Sin canal';ch[k]??=0;ch[k]+=num(r.interacciones)||0});
+ make('channelChart','bar',{labels:Object.keys(ch),datasets:[{label:'Interacciones',data:Object.values(ch)}]});
+ const vals=criteria.map(k=>avgCriteria(rows,k));
+ make('criteriaChart','bar',{labels:labels,datasets:[{label:'Puntuación',data:vals}]},{scales:{y:{min:0,max:10}}});
+ make('radarChart','radar',{labels:labels,datasets:[{label:'Criterios',data:vals,fill:true}]},{scales:{r:{min:0,max:10,ticks:{stepSize:2}}}});
+ const tot=periodTotals(rows);make('funnelChart','bar',{labels:['Alcance','Interacciones','Leads','Conversiones'],datasets:[{label:'Volumen',data:[tot.reach,tot.interactions,tot.leads,tot.conversions]}]});
+}
+document.getElementById('entryForm').addEventListener('submit',e=>{
+ e.preventDefault();const f=new FormData(e.target),r=Object.fromEntries(f.entries());
+ ['alcance','interacciones','leads','conversiones','inversion',...criteria].forEach(k=>{if(r[k]!=='')r[k]=Number(r[k])});
+ r.id=crypto.randomUUID?crypto.randomUUID():Date.now().toString();data.push(r);save();e.target.reset();toast('Registro agregado');render();
+});
+function parseCSV(text){
+ const lines=text.trim().split(/\r?\n/);if(!lines.length)return [];
+ const headers=lines[0].split(',').map(x=>x.trim().replace(/^"|"$/g,''));
+ return lines.slice(1).filter(Boolean).map(line=>{
+  const vals=[];let cur='',q=false;for(let i=0;i<line.length;i++){let c=line[i];if(c==='"'){q=!q}else if(c===','&&!q){vals.push(cur);cur=''}else cur+=c}vals.push(cur);
+  const o={};headers.forEach((h,i)=>o[h]=vals[i]?.trim()??'');return o;
+ });
+}
+function importCSV(ev){const file=ev.target.files[0];if(!file)return;const rd=new FileReader();rd.onload=()=>{const incoming=parseCSV(rd.result);const required=['fecha','area','accion'];const bad=incoming.filter(r=>required.some(k=>!r[k]));if(bad.length){toast(`CSV rechazado: ${bad.length} fila(s) sin campos obligatorios`);return}incoming.forEach(r=>{['alcance','interacciones','leads','conversiones','inversion',...criteria].forEach(k=>{if(r[k]!==''&&r[k]!=null&&!isNaN(Number(r[k])))r[k]=Number(r[k])});r.id=crypto.randomUUID?crypto.randomUUID():Date.now()+Math.random()});data.push(...incoming);save();toast(`${incoming.length} registros importados`);render()};rd.readAsText(file);ev.target.value=''}
+function exportCSV(){if(!data.length){toast('No hay datos');return}const headers=[...new Set(data.flatMap(r=>Object.keys(r)))];const csv=[headers.join(','),...data.map(r=>headers.map(h=>`"${String(r[h]??'').replaceAll('"','""')}"`).join(','))].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='dashboard_datos.csv';a.click()}
+function clearData(){if(confirm('¿Borrar todos los datos guardados?')){data=[];save();render();toast('Datos eliminados')}}
+function resetFilters(){['fDate','tDate','fSearch'].forEach(id=>document.getElementById(id).value='');['fArea','fChannel','fProject','fStatus'].forEach(id=>document.getElementById(id).value='');render()}
+function loadDemo(){
+ data=[
+ {fecha:'2026-07-01',area:'Redes Sociales',proyecto:'Demo',accion:'Contenido educativo',canal:'Instagram',objetivo:'Alcance',entregable:'Reel',alcance:12000,interacciones:420,leads:8,conversiones:1,inversion:1000,resultado:'Buen alcance',estado:'Completado',estrategico:8,tecnico:8,creativo:7,analitico:6,operativo:9,comunicacional:8,critico:7,resultados:6,evidencia:'Métricas de plataforma'},
+ {fecha:'2026-08-01',area:'Redes Sociales',proyecto:'Demo',accion:'Contenido educativo',canal:'Instagram',objetivo:'Alcance',entregable:'Carrusel',alcance:10000,interacciones:280,leads:10,conversiones:0,inversion:1200,resultado:'Menor interacción',estado:'Completado',estrategico:7,tecnico:8,creativo:7,analitico:5,operativo:9,comunicacional:7,critico:6,resultados:5,evidencia:'Métricas de plataforma'},
+ {fecha:'2026-08-15',area:'PR',proyecto:'Demo',accion:'Gestión de prensa',canal:'PR',objetivo:'Reputación',entregable:'Nota de prensa',alcance:5000,interacciones:150,leads:4,conversiones:2,inversion:500,resultado:'Cobertura obtenida',estado:'Completado',estrategico:9,tecnico:8,creativo:8,analitico:8,operativo:8,comunicacional:9,critico:8,resultados:9,evidencia:'Clipping y conversiones'}
+ ];data.forEach(r=>r.id=Date.now()+Math.random());save();toast('Datos demo cargados');render()
+}
+render();
+</script>
+</body>
+</html>
